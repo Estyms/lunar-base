@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Users :: Lunar Base{% endblock %}
+{% block bar_right %}USERS{% endblock %}
+{% block content %}
+<h1 class="bracket-header">Registered Users</h1>
+
+{% if users %}
+<div class="panel">
+  <table>
+    <thead>
+      <tr>
+        <th>User ID</th>
+        <th>Name</th>
+        <th>Level</th>
+        <th>Logins</th>
+        <th>Last login</th>
+        <th>Registered</th>
+        <th>UUID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><a href="/users/{{ u.user_id }}">{{ u.user_id }}</a></td>
+        <td>
+          {% if u.name %}
+            <a href="/users/{{ u.user_id }}">{{ u.name }}</a>
+          {% else %}
+            <span style="color:var(--fg-mid)">&mdash;</span>
+          {% endif %}
+        </td>
+        <td>{{ u.level }}</td>
+        <td>{{ u.total_login_count }}</td>
+        <td>{% if u.last_login_at %}{{ u.last_login_at.strftime("%Y-%m-%d %H:%M") }}{% else %}<span style="color:var(--fg-mid)">never</span>{% endif %}</td>
+        <td>{% if u.register_at %}{{ u.register_at.strftime("%Y-%m-%d") }}{% else %}<span style="color:var(--fg-mid)">&mdash;</span>{% endif %}</td>
+        <td><code>{{ u.uuid }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel">
+  <p style="margin:0;color:var(--fg-mid)">No users found in the database.</p>
+</div>
+{% endif %}
+{% endblock %}

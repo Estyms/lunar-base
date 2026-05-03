@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Save Data :: Lunar Base{% endblock %}
+{% block bar_right %}SAVE DATA{% endblock %}
+{% block content %}
+<h1 class="bracket-header">Save Data Archives</h1>
+
+<div class="panel panel-corners">
+  <p style="margin-top:0">
+    Backups capture the full game database. The most recent <strong>{{ retention }}</strong>
+    are kept; older entries are pruned automatically when a new one is created.
+    Backups taken before a restore are tagged <code>pre-restore</code>.
+  </p>
+  <p style="margin-bottom:0">
+    Source: <code>{{ game_db_path }}</code>
+    {% if not game_db_exists %}
+      <span class="status-pill warn" style="margin-left:8px">MISSING</span>
+    {% endif %}
+  </p>
+
+  <form method="post" action="/backups/create" style="margin-top:16px">
+    <button type="submit" {% if not game_db_exists %}disabled{% endif %}>
+      Create backup
+    </button>
+    {% if not game_db_exists %}
+      <span style="margin-left:12px;color:var(--fg-mid)">Game database not found &mdash; nothing to back up.</span>
+    {% endif %}
+  </form>
+</div>
+
+<h1 class="bracket-header">Archives ({{ backups|length }})</h1>
+
+{% if lunar_tear_running %}
+  <div class="banner error">&gt; Restore disabled :: {{ lunar_tear_running }}</div>
+{% endif %}
+
+{% if backups %}
+<div class="panel">
+  <table>
+    <thead>
+      <tr>
+        <th>Created</th>
+        <th>Reason</th>
+        <th>Size</th>
+        <th>Filename</th>
+        <th>Restore</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td>{{ b.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td>{{ b.reason_display }}</td>
+        <td>{{ b.size_human }}</td>
+        <td><code>{{ b.filename }}</code></td>
+        <td>
+          <form method="post" action="/backups/restore" class="confirm-form"
+                onsubmit="return confirm('Restore from {{ b.filename }}?\n\nA pre-restore safety backup will be taken first.');">
+            <input type="hidden" name="filename" value="{{ b.filename }}">
+            <input type="text" name="confirm" placeholder="type RESTORE" size="12" required pattern="RESTORE" title="Type RESTORE in uppercase to confirm">
+            <button type="submit" class="danger" {% if lunar_tear_running %}disabled{% endif %}>Restore</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="panel">
+  <p style="margin:0;color:var(--fg-mid)">No backups yet. Use &ldquo;Create backup&rdquo; above.</p>
+</div>
+{% endif %}
+{% endblock %}
