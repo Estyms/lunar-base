@@ -1,2 +1,160 @@
-# lunar-base
-Control panel for someone who lives in the moon and manages The Cage.
+# Lunar Base
+
+A browser-based management interface for someone who lives on the moon and manages The Cage. Sits alongside **lunar-tear** and lets you back up, restore, and (in later stages) edit the player database from a browser.
+
+> Web-based control panel for a [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) private server.
+
+---
+
+## Requirements
+
+- Windows 10/11
+- Python 3.10 or newer (tested on 3.14)
+- A working [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) checkout at the sibling path `..\lunar-tear\`
+- The [lunar-scripts](https://gitlab.com/walter-sparrow-group/lunar-scripts) repo at `..\lunar-scripts\` *(only needed for the one-time master-data dump in stage 2+)*
+- The encrypted master data binary at `..\lunar-tear\server\assets\release\20240404193219.bin.e` *(populated by the lunar-tear setup, not by us)*
+
+### Expected directory layout
+
+```
+NierRein Repos\
+├── lunar-tear\
+├── lunar-scripts\
+└── lunar-base\        ← this repo
+```
+
+---
+
+## Setup & Running
+
+### Setup (run once)
+
+```bat
+setup.bat
+```
+
+Creates a virtual environment in `.venv\` and installs Python dependencies from `web\requirements.txt`. Re-run any time dependencies change.
+
+### Run
+
+```bat
+run-lunar-base.bat
+```
+
+Then open **http://127.0.0.1:8888** in your browser. Press `Ctrl+C` in the terminal to stop the server.
+
+> The app binds to `127.0.0.1` only — no other machine on your network can reach it.
+
+---
+
+## Master Data & English Names
+
+Stages 1+ (currency / costume / weapon editors) require two things derived from the game's data files:
+
+- **Master data tables** decoded from the encrypted `.bin.e` to JSON.
+- **English display names** extracted from lunar-tear's text-bundle revisions.
+
+`setup.bat` handles both automatically on first run. Subsequent runs detect existing output and skip.
+
+| Step | Output directory | Source |
+|------|-----------------|--------|
+| Master-data dump | `data\masterdata\` | `..\lunar-tear\server\assets\release\*.bin.e` |
+| Names extraction | `data\names\` | `data\masterdata\` + `..\lunar-tear\server\assets\revisions\` |
+
+Both output directories are gitignored and together hold ~700 JSON files.
+
+> If the game's data ever changes (a server-side patch), redump by deleting `data\masterdata\` and `data\names\`, then re-running `setup.bat`.
+
+### Manual fallback
+
+If the master-data dump is skipped (lunar-scripts or `.bin.e` missing) or fails, run it yourself:
+
+```bat
+cd ..\lunar-scripts
+py dump_masterdata.py --input ..\lunar-tear\server\assets\release\20240404193219.bin.e --output ..\lunar-base\data\masterdata
+```
+
+The dump needs `pycryptodome msgpack lz4`. `setup.bat` installs these into `.venv\` automatically; for a fully manual run, install them globally:
+
+```bat
+pip install pycryptodome msgpack lz4
+```
+
+If the names extraction is skipped or fails, run it from the `lunar-base` root:
+
+```bat
+.venv\Scripts\python.exe tools\extract_names.py
+```
+
+Defaults read from `data\masterdata\` and `..\lunar-tear\server\assets\revisions\`, writing to `data\names\`. Run with `--help` to override any of those paths.
+
+---
+
+## Stages
+
+| # | Name | Status | Description |
+|---|------|--------|-------------|
+| 0a | Backup & Restore | ✅ Done | Snapshot `game.db`, restore from snapshots. Restore refuses while lunar-tear is running. Rolling pool keeps the 50 most recent snapshots. |
+| 0b | Read-only Viewer | ✅ Done | Pick a player, see currencies and inventory counts. |
+| 1 | Item Editor | ✅ Done | Top up gems, gold, materials, consumables, and important items. All grants are additive and routed through lunar-tear's `GrantPossession`. Per-tab **GRANT ALL CHOSEN** batches every row with an amount set; **MAX ALL** on Consumables/Materials runs a curated rule set in a single transaction; **ADD ALL REMNANTS** grants every missing "Remnant: ..." Important Item. |
+| 2 | Costume Editor | ✅ Done | Grant 4-star (R40) and 3-star (R30) playable costumes via `GrantCostume`. R20 story-starter costumes are excluded. Sort order: Recollections of Dusk » Dark Memory » Other 4-Star » 3-Star, alphabetical within each group. |
+| 3 | Weapon Editor | ✅ Done | Grant playable weapons via `GrantWeapon`, cascading into skills, abilities, weapon notes, and story unlocks. R20 chains excluded. 519-entry catalog split into RoD » Dark Memory » Other 4-Star » 3-Star. RoD and Dark Memory grant the final R50 form; others grant the base step for in-game evolution. Hard 999-row inventory cap enforced; oversized batches refused with a clear error. Already-owned weapons filtered client-side. |
+| 4 | Upgrades | ✅ Done | Companions, weapons, costumes, exalt upgrades, mythic slab upgrades, and karma effect selector. |
+| 5 | Memoir Editor | 🚧 In progress | — |
+
+---
+
+## Architecture
+
+```
+lunar-base\
+├── web\          Python (FastAPI + Jinja2) — UI and orchestration
+├── tools\        Supporting scripts and the Go shim
+│   ├── extract_names.py       Resolves entity IDs to English names from lunar-tear's text bundles
+│   └── grant\
+│       ├── src\               Go source for the lunar-base-grant shim
+│       └── grant.exe          Compiled binary (built by setup.bat, gitignored)
+└── data\         Gitignored — master-data JSON, name maps, and DB backups
+```
+
+- **`web\`** reads `game.db` directly via the `sqlite3` standard library; all mutations shell out to the Go shim.
+- **`tools\grant\grant.exe`** reads one JSON request from stdin and writes one JSON response to stdout.
+- **`tools\extract_names.py`** is adapted from Engels (used with permission).
+
+### How the Go shim is built
+
+Lunar Base never modifies lunar-tear's source tree, but the shim must import lunar-tear's internal grant code. Go's `internal/` package rule requires the importing code to live inside `lunar-tear/server/`, so `setup.bat` does the following each run:
+
+1. Copies `tools\grant\src\` into `..\lunar-tear\server\cmd\lunar-base-grant\` (creating it if needed). The `lunar-base-grant` name is distinct from lunar-tear's own commands so its origin is obvious.
+2. Runs `go build` against that directory and writes `grant.exe` back to `tools\grant\grant.exe` inside lunar-base.
+
+The `lunar-base-grant\` directory will appear under `lunar-tear\server\cmd\` after running `setup.bat` — this is expected. Lunar Base does not edit, delete, or version-control anything else in lunar-tear's tree.
+
+> If `go` is not on your PATH, the build is skipped with a warning and stages 1+ will not work. Install Go 1.25+ and re-run `setup.bat`.
+
+---
+
+## Safety
+
+- Lunar Base **only writes** to `..\lunar-tear\server\db\game.db` and `..\lunar-tear\server\cmd\lunar-base-grant\`. No other files in `lunar-tear\` or `lunar-scripts\` are touched.
+- Every mutation takes an **automatic backup** beforehand (filed under `data\backups\` with a reason tag like `item-editor`, `costume-editor`, or `weapon-editor`). Backups are pruned to the 50 most recent of any kind.
+- **Restore refuses** if it detects lunar-tear is running, preventing active database corruption.
+- All grants are **additive** — Lunar Base never decreases quantities. Roll back via backup if needed.
+
+---
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+## Legal Disclaimer
+
+Lunar Tear is a fan-made, non-commercial preservation and research project dedicated to keeping a certain discontinued mobile game playable for educational and archival purposes.
+
+This project is not affiliated with, endorsed by, or approved by the original publisher or any of its subsidiaries. All trademarks, copyrights, and intellectual property related to the original game and its associated franchises belong to their respective owners. All code in this repository is original work developed through clean-room reverse engineering for interoperability with the game client. No copyrighted game assets, binaries, or master data are distributed in this repository.
+
+Use at your own risk. The author assumes no liability for any damages or legal consequences that may arise from using this software. By using or contributing to this project, you are solely responsible for ensuring your usage complies with all applicable laws in your jurisdiction.
+
+If you are a rights holder with concerns regarding this project, please contact the me directly.
