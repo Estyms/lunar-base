@@ -65,6 +65,7 @@ _remnant_catalog: list[tuple[int, str]] | None = None
 _panels_by_character: dict[int, list[int]] | None = None
 _owned_character_filter: list[int] | None = None
 _thought_catalog: list[int] | None = None
+_dark_memory_cutscene_ids: list[int] | None = None
 
 # Companion / costume / weapon level + ascension caps. These mirror the
 # m_config table values (verified 2026-05-02:
@@ -126,6 +127,32 @@ def _load_thought_catalog() -> list[int]:
     rows = json.loads(path.read_text(encoding="utf-8"))
     ids = sorted({int(r["ThoughtId"]) for r in rows})
     _thought_catalog = ids
+    return ids
+
+
+def _load_dark_memory_cutscene_ids() -> list[int]:
+    """Return every ContentsStoryId tied to a Dark Memory weapon grant.
+
+    The game queues a forced cutscene per Dark Memory weapon's first
+    acquisition; only one plays per launch and undrained ones soft-lock
+    progression. EntityMContentsStoryTable currently holds 84 entries,
+    all with IsForcedPlay=true and ContentsStoryUnlockConditionType=1
+    (weapon-owned). Filtering on those flags keeps us future-proof if
+    new non-Dark-Memory cutscenes get added later (we'd skip those).
+    """
+    global _dark_memory_cutscene_ids
+    if _dark_memory_cutscene_ids is not None:
+        return _dark_memory_cutscene_ids
+    path = config.MASTERDATA_DIR / "EntityMContentsStoryTable.json"
+    if not path.exists():
+        raise UpgradeError(f"EntityMContentsStoryTable.json not found at {path}")
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    ids = sorted({
+        int(r["ContentsStoryId"])
+        for r in rows
+        if r.get("IsForcedPlay") and int(r.get("ContentsStoryUnlockConditionType", 0)) == 1
+    })
+    _dark_memory_cutscene_ids = ids
     return ids
 
 
@@ -484,6 +511,34 @@ def fill_karma_slots(
         succeeded=int(result.get("applied", 0)),
         duration_ms=duration_ms,
         detail={"preferences_sent": bool(preferences)},
+    )
+
+
+def skip_dark_memory_cutscenes(user_id: int) -> UpgradeOutcome:
+    """Mark every Dark Memory cutscene as already played.
+
+    Use after mass-granting Dark Memory weapons to clear the cutscene
+    queue. The shim writes user.ContentsStories[id]=now for each id
+    in EntityMContentsStoryTable that has IsForcedPlay=true and
+    ConditionType=1 (weapon-owned). Already-marked ids are skipped.
+    """
+    ids = _load_dark_memory_cutscene_ids()
+    if not ids:
+        return UpgradeOutcome(succeeded=0, duration_ms=0, detail={"reason": "no cutscenes in catalog"})
+    _ensure_shim_available()
+    backup_service.create_backup(reason=BACKUP_REASON)
+    started = time.monotonic()
+    result = _invoke_shim({
+        "action": "mark_contents_stories_played",
+        "db_path": str(config.GAME_DB_PATH),
+        "user_id": user_id,
+        "contents_story_ids": ids,
+    })
+    duration_ms = int((time.monotonic() - started) * 1000)
+    return UpgradeOutcome(
+        succeeded=int(result.get("applied", 0)),
+        duration_ms=duration_ms,
+        detail={"total_ids": len(ids)},
     )
 
 

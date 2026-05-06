@@ -59,6 +59,10 @@
 //   set_memoir_subs_batch    - overwrite sub-status rows for given
 //                              user_parts_uuids with caller-chosen slot
 //                              configurations.
+//   mark_contents_stories_played - write user.ContentsStories[id]=now for
+//                              each id, marking cutscenes as viewed.
+//                              Used to clear the Dark Memory cutscene
+//                              queue after mass-grants.
 package main
 
 import (
@@ -165,6 +169,7 @@ type request struct {
 	CostumeKarma     []costumeKarmaSpec     `json:"costume_karma"`
 	Memoirs          []memoirGrantSpec      `json:"memoirs"`
 	MemoirSlots      []memoirSlotsSpec      `json:"memoir_slots"`
+	ContentsStoryIDs []int32                `json:"contents_story_ids"`
 }
 
 type response struct {
@@ -341,6 +346,8 @@ func run() (int, error) {
 		return runUpgradeAllMemoirs(&req)
 	case "set_memoir_subs_batch":
 		return runSetMemoirSubsBatch(&req)
+	case "mark_contents_stories_played":
+		return runMarkContentsStoriesPlayed(&req)
 	case "":
 		return 0, errors.New("action required")
 	default:

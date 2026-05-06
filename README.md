@@ -10,6 +10,7 @@ A browser-based management interface for someone who lives on the moon and manag
 
 - Windows 10/11
 - Python 3.10 or newer (tested on 3.14)
+- Go 1.25 or newer on `PATH` *(needed to build the `lunar-base-grant` shim; without it stages 1+ won't work)*
 - A working [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) checkout at the sibling path `..\lunar-tear\`
 - The [lunar-scripts](https://gitlab.com/walter-sparrow-group/lunar-scripts) repo at `..\lunar-scripts\` *(only needed for the one-time master-data dump in stage 2+)*
 - The encrypted master data binary at `..\lunar-tear\server\assets\release\20240404193219.bin.e` *(populated by the lunar-tear setup, not by us)*
@@ -98,8 +99,8 @@ Defaults read from `data\masterdata\` and `..\lunar-tear\server\assets\revisions
 | 0b | Read-only Viewer |  Done | Pick a player, see currencies and inventory counts. |
 | 1 | Item Editor |  Done | Top up gems, gold, materials, consumables, and important items. All grants are additive and routed through lunar-tear's `GrantPossession`. Per-tab **GRANT ALL CHOSEN** batches every row with an amount set; **MAX ALL** on Consumables/Materials runs a curated rule set in a single transaction. |
 | 2 | Costume Editor |  Done | Grant 4-star (R40) and 3-star (R30) playable costumes via `GrantCostume`. R20 story-starter costumes are excluded. Sort order: Recollections of Dusk (Frozen-Heart / F-H) » Dark Memory » Other 4-Star » 3-Star, alphabetical within each group. |
-| 3 | Weapon Editor |  Done | Grant playable weapons via `GrantWeapon`, cascading into skills, abilities, weapon notes, and story unlocks. R20 chains excluded. 519-entry catalog split into RoD » Dark Memory » Other 4-Star » 3-Star. RoD and Dark Memory grant the final R50 form; others grant the base step for in-game evolution. Hard 999-row inventory cap enforced; oversized batches refused with a clear error. Already-owned weapons filtered client-side. |
-| 4 | Upgrade Manager |  Done | Three sections, nine actions: **Characters** (Exalt All Available, Fill Mythic Slab Pages); **Inventory** (Add All Missing Companions / Remnants / Debris); **Mass Upgrades** (Upgrade All Companions to lv50, Upgrade All Weapons cost-bypassing the full evolve/ascend/refine/enhance/skill path, Upgrade All Costumes cost-bypassing awaken/ascend/enhance/active-skill plus 3 unlocked karma slots, Fill All Karma Slots with rarest-or-chosen effect per slot). |
+| 3 | Weapon Editor |  Done | Grant playable weapons via `GrantWeapon`, cascading into skills, abilities, weapon notes, and story unlocks. R20 chains excluded. 519-entry catalog split into RoD » Dark Memory » Other 4-Star » 3-Star. RoD and Dark Memory grant the final R50 form; others grant the base step for in-game evolution. Hard 999-row inventory cap enforced; oversized batches refused with a clear error. Already-owned weapons filtered client-side. **After mass-adding DM weapons, run "Skip All DM Cutscenes" from the Upgrade Manager** — the game queues a forced cutscene per DM acquisition and only plays one per launch, which soft-locks progression until the queue drains. |
+| 4 | Upgrade Manager |  Done | Three sections, ten actions: **Characters** (Exalt All Available, Fill Mythic Slab Pages); **Inventory** (Add All Missing Companions / Remnants / Debris); **Mass Upgrades** (Upgrade All Companions to lv50, Upgrade All Weapons cost-bypassing the full evolve/ascend/refine/enhance/skill path, Upgrade All Costumes cost-bypassing awaken/ascend/enhance/active-skill plus 3 unlocked karma slots, Skip All DM Cutscenes to clear the queued DM-acquisition cutscene loop, Fill All Karma Slots with rarest-or-chosen effect per slot). |
 | 5 | Memoir Editor |  Done | R40 memoir grants and edits. **Build a Set** grants the 3 memoirs of any of the 18 sets at lv15 with caller-chosen primary main-stat (one of 6 percent/Agility tier-4 options) and 4 sub-stat slots (perfect-roll defaults editable). **Upgrade All Memoirs** sweeps every owned memoir to lv15. **Fix Slots** rewrites the 4 sub-status rows on a single memoir. 999-memoir inventory cap pre-flighted. |
 
 ---
@@ -118,7 +119,7 @@ lunar-base\
 ```
 
 - **`web\`** reads `game.db` directly via the `sqlite3` standard library; all mutations shell out to the Go shim.
-- **`tools\grant\grant.exe`** reads one JSON request from stdin and writes one JSON response to stdout. Implemented actions: `grant_possession`, `grant_batch`, `grant_costume_batch`, `grant_weapon_batch`, `grant_companion_batch`, `grant_thought_batch`, `exalt_characters`, `release_panels`, `upgrade_all_companions`, `upgrade_all_weapons`, `upgrade_all_costumes`, `fill_karma_slots`, `set_costume_karma_batch`, `grant_memoir_batch`, `upgrade_all_memoirs`, `set_memoir_subs_batch`.
+- **`tools\grant\grant.exe`** reads one JSON request from stdin and writes one JSON response to stdout. Implemented actions: `grant_possession`, `grant_batch`, `grant_costume_batch`, `grant_weapon_batch`, `grant_companion_batch`, `grant_thought_batch`, `exalt_characters`, `release_panels`, `upgrade_all_companions`, `upgrade_all_weapons`, `upgrade_all_costumes`, `fill_karma_slots`, `set_costume_karma_batch`, `grant_memoir_batch`, `upgrade_all_memoirs`, `set_memoir_subs_batch`, `mark_contents_stories_played`.
 - **`tools\extract_names.py`** is adapted from Engels (used with permission).
 
 ### How the Go shim is built

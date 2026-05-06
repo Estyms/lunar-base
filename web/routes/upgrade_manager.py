@@ -266,3 +266,14 @@ async def fill_karma_slots_endpoint(user_id: int, request: Request) -> JSONRespo
     except FileNotFoundError as e:
         return _err(f"Backup failed: {e}", status=500)
     return _ok(outcome)
+
+
+@router.post("/users/{user_id}/upgrades/skip_dark_memory_cutscenes")
+def skip_dark_memory_cutscenes_endpoint(user_id: int) -> JSONResponse:
+    try:
+        outcome = upgrade_service.skip_dark_memory_cutscenes(user_id)
+    except upgrade_service.UpgradeError as e:
+        return _err(str(e))
+    except FileNotFoundError as e:
+        return _err(f"Backup failed: {e}", status=500)
+    return _ok(outcome)
