@@ -335,6 +335,51 @@ def get_costume_count(user_id: int) -> int:
     return int(row["c"])
 
 
+def get_memoir_count(user_id: int) -> int:
+    """Total number of memoir (parts) rows owned by the user."""
+    with _readonly_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM user_parts WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+    return int(row["c"])
+
+
+@dataclass(frozen=True)
+class MemoirRow:
+    user_parts_uuid: str
+    parts_id: int
+    level: int
+    parts_status_main_id: int
+
+
+def list_owned_memoirs(user_id: int) -> list[MemoirRow]:
+    """Return every memoir row the user owns, ordered by parts_id then uuid.
+
+    Used by the editor's "Fix Slots" picker so the user can target a
+    specific in-inventory memoir.
+    """
+    with _readonly_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT user_parts_uuid, parts_id, level, parts_status_main_id
+            FROM user_parts
+            WHERE user_id = ?
+            ORDER BY parts_id, user_parts_uuid
+            """,
+            (user_id,),
+        ).fetchall()
+    return [
+        MemoirRow(
+            user_parts_uuid=str(r["user_parts_uuid"]),
+            parts_id=int(r["parts_id"]),
+            level=int(r["level"]),
+            parts_status_main_id=int(r["parts_status_main_id"]),
+        )
+        for r in rows
+    ]
+
+
 def get_empty_karma_slot_count(user_id: int) -> int:
     """Karma slots already unlocked but not yet rolled (OddsNumber == 0).
 

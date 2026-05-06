@@ -67,7 +67,11 @@ _cache: list[CostumeRecord] | None = None
 
 def _classify(name: str, rarity: int) -> str:
     n = name.lower()
-    if rarity == 40 and (n.startswith("frozen-heart") or n.startswith("frozen heart")):
+    if rarity == 40 and (
+        n.startswith("frozen-heart")
+        or n.startswith("frozen heart")
+        or n.startswith("f-h ")
+    ):
         return GROUP_RECOLLECTIONS
     if rarity == 40 and n.startswith("reborn"):
         return GROUP_DARK_MEMORY

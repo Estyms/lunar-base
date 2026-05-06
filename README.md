@@ -1,6 +1,6 @@
 # Lunar Base
 
-A browser-based management interface for someone who lives on the moon and manages The Cage. Sits alongside **lunar-tear** and lets you back up, restore, and (in later stages) edit the player database from a browser.
+A browser-based management interface for someone who lives on the moon and manages The Cage. Sits alongside **lunar-tear** and lets you back up, restore, and edit the player database from a browser.
 
 > Web-based control panel for a [Lunar Tear](https://github.com/Walter-Sparrow/lunar-tear) private server.
 
@@ -33,7 +33,7 @@ NierRein Repos\
 setup.bat
 ```
 
-Creates a virtual environment in `.venv\` and installs Python dependencies from `web\requirements.txt`. Re-run any time dependencies change.
+Creates a virtual environment in `.venv\` and installs Python dependencies from `web\requirements.txt`. Re-run any time dependencies change or after pulling new shim sources.
 
 ### Run
 
@@ -49,7 +49,7 @@ Then open **http://127.0.0.1:8888** in your browser. Press `Ctrl+C` in the termi
 
 ## Master Data & English Names
 
-Stages 1+ (currency / costume / weapon editors) require two things derived from the game's data files:
+Stages 1+ (currency / costume / weapon / upgrade / memoir editors) require two things derived from the game's data files:
 
 - **Master data tables** decoded from the encrypted `.bin.e` to JSON.
 - **English display names** extracted from lunar-tear's text-bundle revisions.
@@ -94,13 +94,13 @@ Defaults read from `data\masterdata\` and `..\lunar-tear\server\assets\revisions
 
 | # | Name | Status | Description |
 |---|------|--------|-------------|
-| 0a | Backup & Restore | ✅ Done | Snapshot `game.db`, restore from snapshots. Restore refuses while lunar-tear is running. Rolling pool keeps the 50 most recent snapshots. |
-| 0b | Read-only Viewer | ✅ Done | Pick a player, see currencies and inventory counts. |
-| 1 | Item Editor | ✅ Done | Top up gems, gold, materials, consumables, and important items. All grants are additive and routed through lunar-tear's `GrantPossession`. Per-tab **GRANT ALL CHOSEN** batches every row with an amount set; **MAX ALL** on Consumables/Materials runs a curated rule set in a single transaction; **ADD ALL REMNANTS** grants every missing "Remnant: ..." Important Item. |
-| 2 | Costume Editor | ✅ Done | Grant 4-star (R40) and 3-star (R30) playable costumes via `GrantCostume`. R20 story-starter costumes are excluded. Sort order: Recollections of Dusk » Dark Memory » Other 4-Star » 3-Star, alphabetical within each group. |
-| 3 | Weapon Editor | ✅ Done | Grant playable weapons via `GrantWeapon`, cascading into skills, abilities, weapon notes, and story unlocks. R20 chains excluded. 519-entry catalog split into RoD » Dark Memory » Other 4-Star » 3-Star. RoD and Dark Memory grant the final R50 form; others grant the base step for in-game evolution. Hard 999-row inventory cap enforced; oversized batches refused with a clear error. Already-owned weapons filtered client-side. |
-| 4 | Upgrades | ✅ Done | Companions, weapons, costumes, exalt upgrades, mythic slab upgrades, and karma effect selector. |
-| 5 | Memoir Editor | 🚧 In progress | — |
+| 0a | Backup & Restore |  Done | Snapshot `game.db`, restore from snapshots. Restore refuses while lunar-tear is running. Rolling pool keeps the 50 most recent snapshots. |
+| 0b | Read-only Viewer |  Done | Pick a player, see currencies and inventory counts. |
+| 1 | Item Editor |  Done | Top up gems, gold, materials, consumables, and important items. All grants are additive and routed through lunar-tear's `GrantPossession`. Per-tab **GRANT ALL CHOSEN** batches every row with an amount set; **MAX ALL** on Consumables/Materials runs a curated rule set in a single transaction. |
+| 2 | Costume Editor |  Done | Grant 4-star (R40) and 3-star (R30) playable costumes via `GrantCostume`. R20 story-starter costumes are excluded. Sort order: Recollections of Dusk (Frozen-Heart / F-H) » Dark Memory » Other 4-Star » 3-Star, alphabetical within each group. |
+| 3 | Weapon Editor |  Done | Grant playable weapons via `GrantWeapon`, cascading into skills, abilities, weapon notes, and story unlocks. R20 chains excluded. 519-entry catalog split into RoD » Dark Memory » Other 4-Star » 3-Star. RoD and Dark Memory grant the final R50 form; others grant the base step for in-game evolution. Hard 999-row inventory cap enforced; oversized batches refused with a clear error. Already-owned weapons filtered client-side. |
+| 4 | Upgrade Manager |  Done | Three sections, nine actions: **Characters** (Exalt All Available, Fill Mythic Slab Pages); **Inventory** (Add All Missing Companions / Remnants / Debris); **Mass Upgrades** (Upgrade All Companions to lv50, Upgrade All Weapons cost-bypassing the full evolve/ascend/refine/enhance/skill path, Upgrade All Costumes cost-bypassing awaken/ascend/enhance/active-skill plus 3 unlocked karma slots, Fill All Karma Slots with rarest-or-chosen effect per slot). |
+| 5 | Memoir Editor |  Done | R40 memoir grants and edits. **Build a Set** grants the 3 memoirs of any of the 18 sets at lv15 with caller-chosen primary main-stat (one of 6 percent/Agility tier-4 options) and 4 sub-stat slots (perfect-roll defaults editable). **Upgrade All Memoirs** sweeps every owned memoir to lv15. **Fix Slots** rewrites the 4 sub-status rows on a single memoir. 999-memoir inventory cap pre-flighted. |
 
 ---
 
@@ -118,14 +118,14 @@ lunar-base\
 ```
 
 - **`web\`** reads `game.db` directly via the `sqlite3` standard library; all mutations shell out to the Go shim.
-- **`tools\grant\grant.exe`** reads one JSON request from stdin and writes one JSON response to stdout.
+- **`tools\grant\grant.exe`** reads one JSON request from stdin and writes one JSON response to stdout. Implemented actions: `grant_possession`, `grant_batch`, `grant_costume_batch`, `grant_weapon_batch`, `grant_companion_batch`, `grant_thought_batch`, `exalt_characters`, `release_panels`, `upgrade_all_companions`, `upgrade_all_weapons`, `upgrade_all_costumes`, `fill_karma_slots`, `set_costume_karma_batch`, `grant_memoir_batch`, `upgrade_all_memoirs`, `set_memoir_subs_batch`.
 - **`tools\extract_names.py`** is adapted from Engels (used with permission).
 
 ### How the Go shim is built
 
 Lunar Base never modifies lunar-tear's source tree, but the shim must import lunar-tear's internal grant code. Go's `internal/` package rule requires the importing code to live inside `lunar-tear/server/`, so `setup.bat` does the following each run:
 
-1. Copies `tools\grant\src\` into `..\lunar-tear\server\cmd\lunar-base-grant\` (creating it if needed). The `lunar-base-grant` name is distinct from lunar-tear's own commands so its origin is obvious.
+1. Copies `tools\grant\src\*.go` into `..\lunar-tear\server\cmd\lunar-base-grant\` (creating it if needed). The `lunar-base-grant` name is distinct from lunar-tear's own commands so its origin is obvious.
 2. Runs `go build` against that directory and writes `grant.exe` back to `tools\grant\grant.exe` inside lunar-base.
 
 The `lunar-base-grant\` directory will appear under `lunar-tear\server\cmd\` after running `setup.bat` — this is expected. Lunar Base does not edit, delete, or version-control anything else in lunar-tear's tree.
@@ -137,7 +137,7 @@ The `lunar-base-grant\` directory will appear under `lunar-tear\server\cmd\` aft
 ## Safety
 
 - Lunar Base **only writes** to `..\lunar-tear\server\db\game.db` and `..\lunar-tear\server\cmd\lunar-base-grant\`. No other files in `lunar-tear\` or `lunar-scripts\` are touched.
-- Every mutation takes an **automatic backup** beforehand (filed under `data\backups\` with a reason tag like `item-editor`, `costume-editor`, or `weapon-editor`). Backups are pruned to the 50 most recent of any kind.
+- Every mutation takes an **automatic backup** beforehand, filed under `data\backups\` with a reason tag (`item-editor`, `costume-editor`, `weapon-editor`, `upgrade-manager`, `memoir-editor`, `pre-restore`, or `manual`). Backups are pruned to the 50 most recent of any kind.
 - **Restore refuses** if it detects lunar-tear is running, preventing active database corruption.
 - All grants are **additive** — Lunar Base never decreases quantities. Roll back via backup if needed.
 

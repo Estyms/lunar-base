@@ -51,6 +51,14 @@
 //                              {costume_id, karma: {slot: odds_number}};
 //                              the shim looks up the user_costume by id,
 //                              writes the OddsNumber, skips if same.
+//   grant_memoir_batch       - insert N new memoirs (Parts rows) with chosen
+//                              level, primary main-stat, and sub-stat rows.
+//                              Pre-flights against the 999-row inventory cap.
+//   upgrade_all_memoirs      - set every owned memoir's Level to 15 (no RNG
+//                              enhance loop, no sub-stat fill).
+//   set_memoir_subs_batch    - overwrite sub-status rows for given
+//                              user_parts_uuids with caller-chosen slot
+//                              configurations.
 package main
 
 import (
@@ -105,6 +113,35 @@ type costumeKarmaSpec struct {
 	Karma     map[string]int32 `json:"karma"` // slot ("1"/"2"/"3") -> odds_number
 }
 
+// memoirSubSpec is one sub-status slot config for a memoir. Slot 1-4.
+// PartsStatusSubLotteryId stays for game-data fidelity but the displayed
+// value is computed from KindType/CalcType/Value at the client.
+type memoirSubSpec struct {
+	Slot      int32 `json:"slot"`
+	LotteryID int32 `json:"lottery_id"`
+	KindType  int32 `json:"kind_type"`
+	CalcType  int32 `json:"calc_type"`
+	Value     int32 `json:"value"`
+}
+
+// memoirGrantSpec describes one memoir to add to inventory. PartsID picks
+// the master-data row (R40 lottery=1 by convention); PartsStatusMainID is
+// the chosen primary stat (one of the 36 EntityMPartsStatusMain ids);
+// Level defaults to 15 for the build-set flow; Subs is slots 1-4.
+type memoirGrantSpec struct {
+	PartsID           int32           `json:"parts_id"`
+	PartsGroupID      int32           `json:"parts_group_id"`
+	PartsStatusMainID int32           `json:"parts_status_main_id"`
+	Level             int32           `json:"level"`
+	Subs              []memoirSubSpec `json:"subs"`
+}
+
+// memoirSlotsSpec targets an existing memoir by uuid for sub-stat rewrite.
+type memoirSlotsSpec struct {
+	UserPartsUUID string          `json:"user_parts_uuid"`
+	Subs          []memoirSubSpec `json:"subs"`
+}
+
 type request struct {
 	Action         string       `json:"action"`
 	DBPath         string       `json:"db_path"`
@@ -126,6 +163,8 @@ type request struct {
 	// {"1": [...], "2": [...], "3": [...]}.
 	KarmaPreferences map[string][]karmaPref `json:"karma_preferences"`
 	CostumeKarma     []costumeKarmaSpec     `json:"costume_karma"`
+	Memoirs          []memoirGrantSpec      `json:"memoirs"`
+	MemoirSlots      []memoirSlotsSpec      `json:"memoir_slots"`
 }
 
 type response struct {
@@ -296,6 +335,12 @@ func run() (int, error) {
 		return runFillKarmaSlots(&req)
 	case "set_costume_karma_batch":
 		return runSetCostumeKarmaBatch(&req)
+	case "grant_memoir_batch":
+		return runGrantMemoirBatch(&req)
+	case "upgrade_all_memoirs":
+		return runUpgradeAllMemoirs(&req)
+	case "set_memoir_subs_batch":
+		return runSetMemoirSubsBatch(&req)
 	case "":
 		return 0, errors.New("action required")
 	default:
